@@ -46,3 +46,8 @@ int main(int argc, char *argv[]) {
 
   return 0;
 }
+
+// to test sighint, just disrupt the program, so do control+c
+// to test sighup, find pid by going into seperate terminal and enter command:
+// ps aux | grep even <-- whatever you call it when you get the process id, kill
+// the program: kill -hup <PID>
