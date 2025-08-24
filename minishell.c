@@ -107,7 +107,7 @@ int main(int argk, char *argv[], char *envp[]) {
         perror("waitpid");
       }
       // REMOVE PRINTF STATEMENT BEFORE SUBMISSION
-      printf("%s done\n", v[0]);
+      // printf("%s done\n", v[0]);
     }
 
     //////////////OG CODE SEGMENT////////////////////////////
