@@ -21,18 +21,18 @@ Compiler/System : gcc/linux
 
 static char line[NL]; /* command input buffer */
 
-/* ---------- background job table ---------- */
+// bg job table
 struct job {
   int active;
-  int id; /* job number: 1,2,3,... */
+  int id;  // job number
   pid_t pid;
-  char cmd[NL]; /* e.g., "sleep 2" */
+  char cmd[NL];  // like sleep 2 etc
 };
 
 static struct job jobs[MAXJ];
 static int nextJobID = 1;
 
-/* print prompt only if interactive (Gradescope pipes input) */
+// print prompt if interactive
 static void prompt(void) {
   if (isatty(STDIN_FILENO)) {
     fprintf(stdout, "\n msh> ");
@@ -40,7 +40,7 @@ static void prompt(void) {
   }
 }
 
-/* add a new background job and print the start message */
+// add new bg job, print start message
 static void add_job(pid_t pid, const char *cmd) {
   for (int i = 0; i < MAXJ; i++) {
     if (!jobs[i].active) {
@@ -54,10 +54,9 @@ static void add_job(pid_t pid, const char *cmd) {
       return;
     }
   }
-  /* optional: fprintf(stderr, "job table full\n"); */
 }
 
-/* when a bg child exits, print the Done line */
+// when a bg child exits, print the Done line
 static void finish_job(pid_t pid) {
   for (int i = 0; i < MAXJ; i++) {
     if (jobs[i].active && jobs[i].pid == pid) {
@@ -69,15 +68,17 @@ static void finish_job(pid_t pid) {
   }
 }
 
-/* reap all finished background children; call this each loop */
+// reap all finished background children, call this each loop
 static void reap_background(void) {
   int status;
+  // pid_t p;
+  //  reap all finished children
   for (;;) {
     pid_t p = waitpid(-1, &status, WNOHANG);
     if (p > 0) {
       finish_job(p);
     } else if (p == 0) {
-      break; /* nothing finished right now */
+      break;  // no more finished children
     } else {
       if (errno != ECHILD) perror("waitpid");
       break;
@@ -86,20 +87,24 @@ static void reap_background(void) {
 }
 
 int main(void) {
-  /* make output appear promptly when not interactive */
+  // make output appear quickly when not interactive
   setvbuf(stdout, NULL, _IOLBF, 0);
   setvbuf(stderr, NULL, _IOLBF, 0);
 
-  char *v[NV]; /* argv-style token array */
+  /* argk - number of arguments */
+  /* argv - argument vector from command line */
+  /* envp - environment pointer */
+
+  char *v[NV];  // argv-style token array
   const char *sep = " \t\n";
 
   while (1) {
-    reap_background(); /* show any Done lines from prior loop */
+    reap_background();  // show any Done lines from the loop prior
     prompt();
 
     if (fgets(line, NL, stdin) == NULL) {
       if (feof(stdin)) {
-        /* before exiting, reap any last finished bg jobs */
+        // before exiting, reap any last finished bg jobs
         reap_background();
         exit(0);
       } else {
@@ -108,7 +113,7 @@ int main(void) {
       }
     }
 
-    /* ignore blank lines and comments */
+    // ignore blank lines and comments
     if (line[0] == '#' || line[0] == '\n' || line[0] == '\0') continue;
 
     /* tokenize */
@@ -118,24 +123,25 @@ int main(void) {
       v[i] = strtok(NULL, sep);
       if (v[i] == NULL) break;
     }
-    if (!v[0]) continue; /* nothing to do */
+    if (!v[0]) continue;  // nothing to do
 
-    /* detect background '&' (both as separate token and as trailing char) */
+    // detect background '&' (both as separate token and as a trailing
+    // character)
     int bg = 0;
-    int last = i - 1; /* i points to NULL, so last = i-1 */
+    int last = i - 1;  // i points to NULL, so last = i-1
     if (last >= 0 && v[last]) {
       size_t L = strlen(v[last]);
       if (L == 1 && strcmp(v[last], "&") == 0) {
         bg = 1;
-        v[last] = NULL; /* strip the & token */
+        v[last] = NULL;  // strip the & token
       } else if (L > 1 && v[last][L - 1] == '&') {
         bg = 1;
-        v[last][L - 1] = '\0'; /* strip trailing & */
+        v[last][L - 1] = '\0';  // strip trailing &
         if (v[last][0] == '\0') v[last] = NULL;
       }
     }
 
-    /* built-in: cd (must run in parent) */
+    // built-in: cd (must run in parent)
     if (strcmp(v[0], "cd") == 0) {
       const char *target = v[1];
       if (!target) {
@@ -161,6 +167,13 @@ int main(void) {
         memcpy(cmdline + pos, v[k], len);
         pos += len;
         if (v[k + 1]) cmdline[pos++] = ' ';
+        // parent wait for foreground child
+        // if (waitpid(frkRtnVal, NULL, 0) == -1) { //should not wait and just
+        // print the pid
+        //  perror("waitpid");
+        //}
+        // REMOVE PRINTF STATEMENT BEFORE SUBMISSION
+        // printf("%s done\n", v[0]);
       }
       cmdline[NL - 1] = '\0';
     }
