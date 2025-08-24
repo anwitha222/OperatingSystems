@@ -20,10 +20,14 @@ char line[NL]; /* command input buffer */
 /*
 shell prompt
 */
-void prompt(void) {
+static void prompt(void) {
   // ## REMOVE THIS 'fprintf' STATEMENT BEFORE SUBMISSION
-  fprintf(stdout, "\n msh> ");
-  fflush(stdout);
+  // fprintf(stdout, "\n msh> ");
+  // fflush(stdout);
+  if (isatty(STDIN_FILENO)) {  // only show prompt if interactive for gradescope
+    fprintf(stdout, "\n msh> ");
+    fflush(stdout);
+  }
 }
 /* argk - number of arguments */
 /* argv - argument vector from command line */
