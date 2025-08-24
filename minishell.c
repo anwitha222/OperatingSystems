@@ -1,7 +1,7 @@
 /*********************************************************************
 Program : miniShell Version : 1.3
 --------------------------------------------------------------------
-skeleton code for linix/unix/minix command line interpreter
+skeleton code for linux/unix/minix command line interpreter
 --------------------------------------------------------------------
 File : minishell.c
 Compiler/System : gcc/linux
@@ -14,37 +14,33 @@ Compiler/System : gcc/linux
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#define NV 20    /* max number of command tokens */
-#define NL 100   /* input buffer size */
-#define MAXJ 64  // max bg jobs to track
-char line[NL];   /* command input buffer */
 
-// job table!
+#define NV 20   /* max number of command tokens */
+#define NL 100  /* input buffer size */
+#define MAXJ 64 /* max background jobs to track */
+
+static char line[NL]; /* command input buffer */
+
+/* ---------- background job table ---------- */
 struct job {
   int active;
-  int id;  // gives job number
+  int id; /* job number: 1,2,3,... */
   pid_t pid;
-  char cmd[NL];  // commands like sleep
+  char cmd[NL]; /* e.g., "sleep 2" */
 };
 
 static struct job jobs[MAXJ];
 static int nextJobID = 1;
 
-/*
-shell prompt
-*/
+/* print prompt only if interactive (Gradescope pipes input) */
 static void prompt(void) {
-  // ## REMOVE THIS 'fprintf' STATEMENT BEFORE SUBMISSION
-  // fprintf(stdout, "\n msh> ");
-  // fflush(stdout); //pretty sure next line is not necessary i just forgot to
-  // remove print statement oml
-  if (isatty(STDIN_FILENO)) {  // only show prompt if interactive for gradescope
+  if (isatty(STDIN_FILENO)) {
     fprintf(stdout, "\n msh> ");
     fflush(stdout);
   }
 }
 
-// record a bg job
+/* add a new background job and print the start message */
 static void add_job(pid_t pid, const char *cmd) {
   for (int i = 0; i < MAXJ; i++) {
     if (!jobs[i].active) {
@@ -53,20 +49,19 @@ static void add_job(pid_t pid, const char *cmd) {
       jobs[i].pid = pid;
       strncpy(jobs[i].cmd, cmd, NL - 1);
       jobs[i].cmd[NL - 1] = '\0';
-      // print pid straight away
       printf("[%d] %d\n", jobs[i].id, (int)pid);
       fflush(stdout);
       return;
     }
   }
+  /* optional: fprintf(stderr, "job table full\n"); */
 }
 
-// find job using pid, mark it as done, and print done line
+/* when a bg child exits, print the Done line */
 static void finish_job(pid_t pid) {
   for (int i = 0; i < MAXJ; i++) {
     if (jobs[i].active && jobs[i].pid == pid) {
       jobs[i].active = 0;
-      // match format expected
       printf("[%d]+ Done                 %s\n", jobs[i].id, jobs[i].cmd);
       fflush(stdout);
       return;
@@ -74,99 +69,78 @@ static void finish_job(pid_t pid) {
   }
 }
 
-// call this often to reap finished bg children
+/* reap all finished background children; call this each loop */
 static void reap_background(void) {
   int status;
-  // pid_t p;
-  //  reap all finished children
   for (;;) {
     pid_t p = waitpid(-1, &status, WNOHANG);
     if (p > 0) {
       finish_job(p);
-      continue;
     } else if (p == 0) {
-      // no more finished children
-      break;
+      break; /* nothing finished right now */
     } else {
       if (errno != ECHILD) perror("waitpid");
+      break;
     }
   }
 }
 
-/* argk - number of arguments */
-/* argv - argument vector from command line */
-/* envp - environment pointer */
-int main(int argk, char *argv[], char *envp[]) {
-  pid_t frkRtnVal;  // value returned by fork sys call (this is an actual id :P)
-  // int frkRtnVal;       /* value returned by fork sys call */
-  char *v[NV];         /* array of pointers to command line tokens
-                        */
-  char *sep = " \t\n"; /* command line token separators */
-  int i;               /* parse index */
-  /* prompt for and process one command line at a time */
-  while (1) { /* do Forever */
-    // before showing a prompt, report any completed bg jobs
-    reap_background();
+int main(void) {
+  /* make output appear promptly when not interactive */
+  setvbuf(stdout, NULL, _IOLBF, 0);
+  setvbuf(stderr, NULL, _IOLBF, 0);
+
+  char *v[NV]; /* argv-style token array */
+  const char *sep = " \t\n";
+
+  while (1) {
+    reap_background(); /* show any Done lines from prior loop */
     prompt();
 
     if (fgets(line, NL, stdin) == NULL) {
-      // EOF or read error
       if (feof(stdin)) {
+        /* before exiting, reap any last finished bg jobs */
+        reap_background();
         exit(0);
-      } else {            // DOUBLE CHECK THIS
-        perror("fgets");  // this will be helpful if input fails
+      } else {
+        perror("fgets");
         exit(1);
       }
     }
-    // fgets(line, NL, stdin);
-    // fflush(stdin); UNDEFINED FOR INPUT STREAMS
-    // This if() required for gradescope  //DOUBLE CHECK THIS
-    // if (feof(stdin)) { /* non-zero on EOF */
-    //  exit(0);
-    //}
-    if (line[0] == '#' || line[0] == '\n' || line[0] == '\000') {
-      continue; /* to prompt */
-    }
 
-    // tokenize
+    /* ignore blank lines and comments */
+    if (line[0] == '#' || line[0] == '\n' || line[0] == '\0') continue;
+
+    /* tokenize */
     v[0] = strtok(line, sep);
+    int i;
     for (i = 1; i < NV; i++) {
       v[i] = strtok(NULL, sep);
-      if (v[i] == NULL) {
-        break;
-      }
+      if (v[i] == NULL) break;
     }
+    if (!v[0]) continue; /* nothing to do */
 
-    if (!v[0]) continue;
-
-    // detect bg job
+    /* detect background '&' (both as separate token and as trailing char) */
     int bg = 0;
-    int last = i - 1;  // last token index (i is NULL)
+    int last = i - 1; /* i points to NULL, so last = i-1 */
     if (last >= 0 && v[last]) {
       size_t L = strlen(v[last]);
-
       if (L == 1 && strcmp(v[last], "&") == 0) {
-        // case:... "&"
         bg = 1;
-        v[last] = NULL;  // remove it so execvp doesn't see &
+        v[last] = NULL; /* strip the & token */
       } else if (L > 1 && v[last][L - 1] == '&') {
-        /* case:... "word&" (no space) */
         bg = 1;
-        v[last][L - 1] = '\0';                   // strip trailing &
-        if (v[last][0] == '\0') v[last] = NULL;  // if it became empty, drop it
+        v[last][L - 1] = '\0'; /* strip trailing & */
+        if (v[last][0] == '\0') v[last] = NULL;
       }
     }
 
-    /*v is now a NULL terminated argv*/
-    // cd built in
-    if (v[0] && strcmp(v[0], "cd") == 0) {
+    /* built-in: cd (must run in parent) */
+    if (strcmp(v[0], "cd") == 0) {
       const char *target = v[1];
-
-      if (target == NULL) {
-        // handle cd with no arguments HOME
+      if (!target) {
         target = getenv("HOME");
-        if (target == NULL) {
-          // if no home set then POSIX allow this to fail
+        if (!target) {
           fprintf(stderr, "cd: HOME not set\n");
           continue;
         }
@@ -177,7 +151,7 @@ int main(int argk, char *argv[], char *envp[]) {
       continue;
     }
 
-    // command string for job messages without ampersand
+    /* build a printable command line (without &) for Done message */
     char cmdline[NL] = {0};
     {
       size_t pos = 0;
@@ -191,64 +165,27 @@ int main(int argk, char *argv[], char *envp[]) {
       cmdline[NL - 1] = '\0';
     }
 
-    // external command path
-    frkRtnVal = fork();
-    if (frkRtnVal < 0) {
-      // error in parent
+    /* fork & exec external command */
+    pid_t child = fork();
+    if (child < 0) {
       perror("fork");
       continue;
     }
 
-    if (frkRtnVal == 0) {
-      // child
+    if (child == 0) {
       execvp(v[0], v);
-      // only reach here if exec failed
-      perror("execvp");
-      _exit(127);  // exit child DONT continue into parent code
+      perror("execvp"); /* only reached on failure */
+      _exit(127);
     } else {
       if (bg) {
-        /* background: do NOT wait; just announce */
-        // printf("[%d] %d\n", nextJobID++, frkRtnVal); direct printf wont work
-        // just call helper
-        add_job(frkRtnVal, cmdline);
-        // fflush(stdout); no need to double up
-        /* (optional) add_job(frkRtnVal, cmdline); if you want "Done" later */
+        /* background: don't wait; just record & report */
+        add_job(child, cmdline);
       } else {
         /* foreground: wait */
-        if (waitpid(frkRtnVal, NULL, 0) == -1) {
+        if (waitpid(child, NULL, 0) == -1) {
           perror("waitpid");
         }
       }
-      // parent wait for foreground child
-      // if (waitpid(frkRtnVal, NULL, 0) == -1) { //should not wait and just
-      // print the pid
-      //  perror("waitpid");
-      //}
-      // REMOVE PRINTF STATEMENT BEFORE SUBMISSION
-      // printf("%s done\n", v[0]);
     }
-
-    //////////////OG CODE SEGMENT////////////////////////////
-
-    /* assert i is number of tokens + 1 */
-    /* fork a child process to exec the command in v[0] */
-    // switch (frkRtnVal = fork()) {
-    //   case -1: /* fork returns error to parent process */
-    //   {
-    //     break;
-    //   }
-    //   case 0: /* code executed only by child process */
-    //   {
-    //     execvp(v[0], v);
-    //   }
-    //   default: /* code executed only by parent process */
-    //   {
-    //     wait(0);
-    //  REMOVE PRINTF STATEMENT BEFORE SUBMISSION
-    //    printf("%s done \n", v[0]);
-    //    break;
-    //  }
-    //} /* switch */
-    ///////////////////////////////////////////////////////////////
-  } /* while */
-} /* main */
+  }
+}
