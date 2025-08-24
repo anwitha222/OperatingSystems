@@ -77,10 +77,10 @@ static void finish_job(pid_t pid) {
 // call this often to reap finished bg children
 static void reap_background(void) {
   int status;
-  pid_t p;
-  // reap all finished children
+  // pid_t p;
+  //  reap all finished children
   for (;;) {
-    p = waitpid(-1, &status, WNOHANG);
+    pid_t p = waitpid(-1, &status, WNOHANG);
     if (p > 0) {
       finish_job(p);
       continue;
@@ -88,12 +88,7 @@ static void reap_background(void) {
       // no more finished children
       break;
     } else {
-      if (errno == ECHILD) {
-        break;  // no children
-      } else {
-        perror("waitpid");
-        break;
-      }
+      if (errno != ECHILD) perror("waitpid");
     }
   }
 }
@@ -188,10 +183,10 @@ int main(int argk, char *argv[], char *envp[]) {
       size_t pos = 0;
       for (int k = 0; v[k] && pos < NL - 1; k++) {
         size_t len = strlen(v[k]);
-        if (pos + len + 1 >= NL) break;
+        if (pos + len + (v[k + 1] ? 1 : 0) >= NL) break;
         memcpy(cmdline + pos, v[k], len);
         pos += len;
-        if (pos < NL - 1) cmdline[pos++] = (v[k + 1] ? ' ' : '\0');
+        if (v[k + 1]) cmdline[pos++] = ' ';
       }
       cmdline[NL - 1] = '\0';
     }
@@ -213,8 +208,10 @@ int main(int argk, char *argv[], char *envp[]) {
     } else {
       if (bg) {
         /* background: do NOT wait; just announce */
-        printf("[%d] %d\n", nextJobID++, frkRtnVal);
-        fflush(stdout);
+        // printf("[%d] %d\n", nextJobID++, frkRtnVal); direct printf wont work
+        // just call helper
+        add_job(frkRtnVal, cmdline);
+        // fflush(stdout); no need to double up
         /* (optional) add_job(frkRtnVal, cmdline); if you want "Done" later */
       } else {
         /* foreground: wait */
