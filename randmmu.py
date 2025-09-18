@@ -38,7 +38,7 @@ class RandMMU(MMU):
 
     def write_memory(self, page_number):
         # TODO: Implement the method to write memory
-        self.access(page_number, is_write = True)
+        self._access(page_number, is_write = True)
 
     def get_total_disk_reads(self):
         # TODO: Implement the method to get total disk reads

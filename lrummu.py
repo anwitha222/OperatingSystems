@@ -80,7 +80,7 @@ class LruMMU(MMU):
             return
         #miss
         self.page_faults += 1
-        self.disk_eads += 1
+        self.disk_reads += 1
 
         #use free frame is there is one
         if self.free_frames: 
