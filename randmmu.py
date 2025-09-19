@@ -20,7 +20,9 @@ class RandMMU(MMU):
         self.frame_table = [None] * frames
 
         #map page to frame index for O(1) hits
-        self.page_to_frames = list(range(frames))
+        self.page_to_frame = {}
+
+        self.free_frames = list(range(frames))
 
 
 
@@ -81,7 +83,7 @@ class RandMMU(MMU):
                 print(f"miss: load page {page_number} into free frame {frame} ({op})")
             return
         
-        #no free frames: evict a random variable
+        #no free frames: evict a random frame
         victim_frame = random.randrange(self.frames)
         victim_slot = self.frame_table[victim_frame]
         victim_page = victim_slot["page"]
@@ -92,21 +94,21 @@ class RandMMU(MMU):
             if self.debug:
                 print(f"evict: page {victim_page} from frame {victim_frame} (dirty->write back)")
 
-            #remove victim mapping
-            del self.page_to_frame[victim_page]
+        #remove victim mapping
+        del self.page_to_frame[victim_page]
 
-            #install new page in victim frame
-            self._install_page(victim_frame, page_number, is_write)
-            if self.debug:
-                op = "W" if is_write else "R"
-                print(f"miss: load page {page_number} into frame {victim_frame} ({op})")
+        #install new page in victim frame
+        self._install_page(victim_frame, page_number, is_write)
+        if self.debug:
+            op = "W" if is_write else "R"
+            print(f"miss: load page {page_number} into frame {victim_frame} ({op})")
 
-            def _install_page(self, frame, page_number, is_write):
-                #place page in frame and update maps
-                self.frame_table[frame] = {
-                    "page":page_number, 
-                    "dirty": bool(is_write),
-                }
-                self.page_to_frame[page_number] = frame
+    def _install_page(self, frame, page_number, is_write):
+        #place page in frame and update maps
+        self.frame_table[frame] = {
+            "page":page_number, 
+            "dirty": bool(is_write),
+        }
+        self.page_to_frame[page_number] = frame
                 
 
