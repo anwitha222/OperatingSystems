@@ -107,7 +107,7 @@ class LruMMU(MMU):
             op = "W" if is_write else "R"
             print(f"miss: load page {page_number} into frame {victim_frame} ({op})")
 
-    def _install_pages(self, frame, page_number, is_write):
+    def _install_page(self, frame, page_number, is_write):
         #place page in frame and update the structures
         self.frame_table[frame] = {
             "page": page_number, 

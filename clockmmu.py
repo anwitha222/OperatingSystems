@@ -71,7 +71,7 @@ class ClockMMU(MMU):
             # debug information
             if self.debug:
                 op = "W" if is_write else "R"
-                print(f"hit: page {page_number} in frame {frame} ({op}) dirty = {slot["dirty"]} use = {slot["use"]}")
+                print(f"hit: page {page_number} in frame {frame} ({op}) dirty = {slot['dirty']} use = {slot['use']}")
             return
         
         # in the case of a miss
@@ -96,6 +96,8 @@ class ClockMMU(MMU):
                 slot["use"] = 0
                 if self.debug:
                     print(f"second chance: page {slot['page']} in frame {self.clock_hand} use = {slot['use']}")
+                # move the clock hand to the next frame
+                self.clock_hand = (self.clock_hand + 1) % self.frames
             else:
                 # evict the victim page
                 victim_page = slot["page"]
