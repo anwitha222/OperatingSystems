@@ -4,26 +4,26 @@ from collections import OrderedDict
 class LruMMU(MMU):
     def __init__(self, frames):
         # TODO: Constructor logic for LruMMU
-        #configure
+        # configure frames
         self.frames = frames
-        #debug flag
+        #  set debug flag
         self.debug = False
 
-        #counters set up
-        self.disk_reads = 0
-        self.disk_writes = 0
-        self.page_faults = 0
+        # counters set up
+        self.diskReads = 0
+        self.diskWrites = 0
+        self.pageFaults = 0
 
-        #frame table
+        # frame table
         self.frame_table = [None] * frames
 
-        #fast lookup: page -> frame index
+        # fast lookup: page -> frame index
         self.page_to_frame = {}
 
-        #free frames to use before any eviction
+        # free frames to use before any eviction
         self.free_frames = list(range(frames))
 
-        #least recently used order: keys are pages, most recently used at the end
+        # least recently used order: keys are pages, most recently used at the end
         self.lru = OrderedDict()
 
 
@@ -37,84 +37,86 @@ class LruMMU(MMU):
 
     def read_memory(self, page_number):
         # TODO: Implement the method to read memory
-        self._access(page_number, is_write = False)
+        self._access(page_number, write = False)
 
 
     def write_memory(self, page_number):
         # TODO: Implement the method to write memory
-        self._access(page_number, is_write = True)
+        self._access(page_number, write = True)
 
     def get_total_disk_reads(self):
         # TODO: Implement the method to get total disk reads
-        return self.disk_reads
+        return self.diskReads
 
     def get_total_disk_writes(self):
         # TODO: Implement the method to get total disk writes
-        return self.disk_writes
+        return self.diskWrites
 
     def get_total_page_faults(self):
         # TODO: Implement the method to get total page faults
-        return self.page_faults
+        return self.pageFaults
     
-    #helpers
+    # helper functions
 
-    def _access(self, page_number, is_write):
-        #hit
+    def _access(self, page_number, write):
+        # in the case of a hit
         if page_number in self.page_to_frame:
-            frame = self.page_to_frame[page_number]
-            slot = self.frame_table[frame]
+            frame = self.page_to_frame[page_number] # get the frame index
+            slot = self.frame_table[frame] # get the slot dict
 
-            #mark dirty on write
-            if is_write and not slot ["dirty"]:
+            # mark dirty if it is a write
+            if write and not slot ["dirty"]:
                 slot["dirty"] = True
 
             #refresh lru: move to mru
             if page_number in self.lru:
-                self.lru.move_to_end(page_number, last = True)
+                self.lru.move_to_end(page_number, last = True) # most recently used
             else:
-                self.lru[page_number] = True
+                self.lru[page_number] = True # add to lru if not present
 
+            # debug info
             if self.debug: 
-                op = "W" if is_write else "R"
+                op = "W" if write else "R"
                 print(f"hit: page {page_number} in frame {frame} ({op}) dirty = {slot['dirty']}")
             return
-        #miss
-        self.page_faults += 1
-        self.disk_reads += 1
+        
+        # in the case of a miss
+        self.pageFaults += 1 # increment page faults
+        self.diskReads += 1 # read page from disk
 
-        #use free frame is there is one
+        # use free frame is there is one
         if self.free_frames: 
-            frame = self.free_frames.pop(0)
-            self._install_page(frame, page_number, is_write)
+            frame = self.free_frames.pop(0) # get the first free frame
+            self._install_page(frame, page_number, write) # install the page
             if self.debug:
-                op = "W" if is_write else "R"
+                op = "W" if write else "R"
                 print(f"miss: load page {page_number} into free frame {frame} ({op})")
             return 
         
-        #evict lru at the front of ordered dict
-        victim_page, _ = self.lru.popitem(last = False)
-        victim_frame = self.page_to_frame.pop(victim_page)
-        victim_slot = self.frame_table[victim_frame]
+        # evict lru at the front of ordered dict
+        victim_page, _ = self.lru.popitem(last = False) # get lru page
+        victim_frame = self.page_to_frame.pop(victim_page) # get the frame index
+        victim_slot = self.frame_table[victim_frame] # get the slot dict
 
         if victim_slot["dirty"]:
-            self.disk_writes += 1
+            self.diskWrites += 1
             if self.debug:
                 print(f"evict: page {victim_page} from frame {victim_frame} (dirty->write back)")
 
         #install new page in empty frame
-        self._install_page(victim_frame, page_number, is_write)
+        self._install_page(victim_frame, page_number, write)
         if self.debug: 
-            op = "W" if is_write else "R"
+            op = "W" if write else "R"
             print(f"miss: load page {page_number} into frame {victim_frame} ({op})")
 
-    def _install_page(self, frame, page_number, is_write):
+    def _install_page(self, frame, page_number, write):
         #place page in frame and update the structures
         self.frame_table[frame] = {
             "page": page_number, 
-            "dirty": bool(is_write),
+            "dirty": bool(write),
         }
 
-        self.page_to_frame[page_number] = frame
-        self.lru[page_number] = True
-        self.lru.move_to_end(page_number, last=True) #set as most recently used 
+        self.page_to_frame[page_number] = frame # map page to frame
+        self.lru[page_number] = True # add to lru
+        self.lru.move_to_end(page_number, last=True) # set as most recently used 
 

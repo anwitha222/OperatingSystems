@@ -4,26 +4,26 @@ from mmu import MMU
 class ClockMMU(MMU):
     def __init__(self, frames):
         # TODO: Constructor logic for clockMMU
-        #configure
+        # configure frames
         self.frames = frames
-        #debug flag
+        # debug flag
         self.debug = False
 
-        #counters set up
-        self.disk_reads = 0
-        self.disk_writes = 0
-        self.page_faults = 0
+        # set up counters
+        self.diskReads = 0
+        self.diskWrites = 0
+        self.pageFaults = 0
 
-        #frame table {"page": X, "dirty": bool, "use": 0 or 1})
+        # initialise the frame table {"page": X, "dirty": bool, "use": 0 or 1})
         self.frame_table = [None] * frames
 
-        #fast lookup: page -> frame index
+        # map page to frame index to achieve O(1) hits
         self.page_to_frame = {}
 
-        #free frames to use before any eviction
+        # list of free frames to use before any eviction
         self.free_frames = list(range(frames))
 
-        #least recently used order: keys are pages, most recently used at the end
+        # clock hand pointer
         self.clock_hand = 0
 
     def set_debug(self):
@@ -36,73 +36,78 @@ class ClockMMU(MMU):
 
     def read_memory(self, page_number):
         # TODO: Implement the method to read memory
-        self._access(page_number, is_write = False)
+        self._access(page_number, write = False)
 
     def write_memory(self, page_number):
         # TODO: Implement the method to write memory
-        self._access(page_number, is_write = True)
+        self._access(page_number, write = True)
 
     def get_total_disk_reads(self):
         # TODO: Implement the method to get total disk reads
-        return self.disk_reads
+        return self.diskReads
 
     def get_total_disk_writes(self):
         # TODO: Implement the method to get total disk writes
-        return self.disk_writes
+        return self.diskWrites
 
     def get_total_page_faults(self):
         # TODO: Implement the method to get total page faults
-        return self.page_faults
+        return self.pageFaults
     
-    def _access(self, page_number, is_write):
+    def _access(self, page_number, write):
         # in the case of a hit
         if page_number in self.page_to_frame:
-            # get frame and slot
+            # get the frame and slot
             frame = self.page_to_frame[page_number]
             slot = self.frame_table[frame]
 
-            # if write, set the bit dirty
-            if is_write and not slot["dirty"]:
+            # if it is a write, set the bit dirty
+            if write and not slot["dirty"]:
                 slot["dirty"] = True
             
             # set use bit to 1 regardless of read or write
             slot["use"] = 1
 
-            # debug information
+            # debugging info
             if self.debug:
-                op = "W" if is_write else "R"
+                op = "W" if write else "R"
                 print(f"hit: page {page_number} in frame {frame} ({op}) dirty = {slot['dirty']} use = {slot['use']}")
             return
         
         # in the case of a miss
-        self.page_faults += 1
-        self.disk_reads += 1
+        self.pageFaults += 1
+        self.diskReads += 1
 
         # use a free frame if available
         if self.free_frames:
             frame = self.free_frames.pop(0) # get the first free frame
-            self._install_page(frame, page_number, is_write)
+            self._install_page(frame, page_number, write) # install the page
+
+             # debugging info
             if self.debug:
-                op = "W" if is_write else "R"
+                op = "W" if write else "R"
                 print(f"miss: load page {page_number} into free frame {frame} ({op})")
             return
 
-        # if no free frame, we must evict a page
+        # if there is no free frame, we must evict a page
         while (True):
             slot = self.frame_table[self.clock_hand]
-
+            
             if slot["use"] == 1:
                 # give the page a second chance
                 slot["use"] = 0
+
                 if self.debug:
                     print(f"second chance: page {slot['page']} in frame {self.clock_hand} use = {slot['use']}")
+                
                 # move the clock hand to the next frame
                 self.clock_hand = (self.clock_hand + 1) % self.frames
+
             else:
                 # evict the victim page
                 victim_page = slot["page"]
                 if slot["dirty"]:
-                    self.disk_writes += 1 # write the page back to disk if dirty
+                    self.diskWrites += 1 # write the page back to disk if dirty
                     if self.debug:
                         print(f"evicting dirty page {victim_page} from frame {self.clock_hand}, (dirty->write back)")
                         
@@ -110,10 +115,10 @@ class ClockMMU(MMU):
                 del self.page_to_frame[victim_page]
 
                 # install the new page in the victim frame
-                self._install_page(self.clock_hand, page_number, is_write)
+                self._install_page(self.clock_hand, page_number, write)
 
                 if self.debug:
-                    op = "W" if is_write else "R"
+                    op = "W" if write else "R"
                     print(f"miss occured, load page {page_number} into frame {self.clock_hand} ({op})")
 
                 # move the clock hand to the next frame
@@ -127,7 +132,7 @@ class ClockMMU(MMU):
             "dirty": bool(is_written),
             "use": 1, # set use bit to 1 when installing a new page
         }
-        self.page_to_frame[page_number] = frame
+        self.page_to_frame[page_number] = frame # map page to frame
 
 
 
